@@ -1,0 +1,992 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>CampusPilot AI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout concept: a flight-deck app shell. A left rail holds the instruments (views), the page is a calm panel of gauges and routes, and signal orange marks only what needs attention. */
+:root{
+  --bg:#F1F4F2; --surface:#FFFFFF; --surface-2:#E7ECE9; --ink:#10201C; --ink-2:#51625D; --line:#D3DCD8;
+  --accent:#0E6B62; --on-accent:#FFFFFF; --accent-soft:#D9EEEA; --signal:#D94E24; --signal-soft:#FBE3DA;
+  --good:#23824F; --warn:#9A6A06; --bad:#C13B36; --good-soft:#DCF0E4; --warn-soft:#F6EAC9; --bad-soft:#F7DCDA;
+  --f-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --f-body:'Figtree','Segoe UI',system-ui,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1614; --surface:#14201D; --surface-2:#1B2B27; --ink:#E5EFEB; --ink-2:#9CB2AB; --line:#263833;
+    --accent:#45C7B6; --on-accent:#06201C; --accent-soft:#15332F; --signal:#FF8052; --signal-soft:#3A2119;
+    --good:#4CC38A; --warn:#E3B341; --bad:#F0716C; --good-soft:#163527; --warn-soft:#38300F; --bad-soft:#3B1A19;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1614; --surface:#14201D; --surface-2:#1B2B27; --ink:#E5EFEB; --ink-2:#9CB2AB; --line:#263833;
+  --accent:#45C7B6; --on-accent:#06201C; --accent-soft:#15332F; --signal:#FF8052; --signal-soft:#3A2119;
+  --good:#4CC38A; --warn:#E3B341; --bad:#F0716C; --good-soft:#163527; --warn-soft:#38300F; --bad-soft:#3B1A19;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:15px; line-height:1.55;
+  padding-block:0;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+h1,h2,h3,h4{font-family:var(--f-display); font-weight:600; letter-spacing:-0.01em; line-height:1.15; margin:0; text-wrap:balance}
+p{margin:0}
+button,input,select,textarea{font:inherit; color:inherit}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px}
+.mono{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-2)}
+.small{font-size:13px}
+.eyebrow{font-size:11.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-2); font-weight:600}
+
+/* shell */
+.shell{max-width:1240px; margin:0 auto; padding-block:16px 40px; display:grid; gap:20px; grid-template-columns:1fr}
+@media (min-width:920px){ .shell{grid-template-columns:232px minmax(0,1fr); align-items:start} }
+.topbar{grid-column:1/-1; display:flex; align-items:center; gap:16px; flex-wrap:wrap; justify-content:space-between}
+.brand{display:flex; align-items:center; gap:12px; min-width:0}
+.mark{width:40px; height:40px; border-radius:11px; background:var(--accent); color:var(--on-accent); display:grid; place-items:center; flex:none}
+.brand h1{font-size:22px}
+.brand small{display:block; color:var(--ink-2); font-size:12.5px; line-height:1.3}
+.tools{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.seg{display:inline-flex; background:var(--surface-2); border-radius:10px; padding:3px; gap:2px}
+.seg button{border:0; background:transparent; padding:6px 12px; border-radius:8px; cursor:pointer; font-weight:500; font-size:13.5px; color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.iconbtn{border:1px solid var(--line); background:var(--surface); width:36px; height:36px; border-radius:10px; display:grid; place-items:center; cursor:pointer; color:var(--ink)}
+
+.nav{display:flex; gap:4px; overflow-x:auto; padding-bottom:4px; scrollbar-width:thin}
+.nav button{display:flex; align-items:center; gap:10px; border:0; background:transparent; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:500; color:var(--ink-2); white-space:nowrap; text-align:left}
+.nav button:hover{background:var(--surface-2); color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--accent); color:var(--on-accent)}
+.nav .count{margin-left:auto; background:var(--signal); color:#fff; font-size:11.5px; border-radius:99px; padding:0 7px; font-family:var(--f-mono)}
+@media (min-width:920px){
+  .nav{flex-direction:column; position:sticky; top:16px; overflow:visible}
+  .nav button{width:100%}
+  .navnote{display:block}
+}
+.navnote{display:none; margin-top:16px; padding:12px; border-radius:10px; background:var(--surface-2); color:var(--ink-2); font-size:12.5px}
+
+main{min-width:0; display:grid; gap:18px}
+.pagehead{display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap}
+.pagehead h2{font-size:28px}
+.pagehead p{color:var(--ink-2); max-width:62ch; margin-top:4px}
+
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px; min-width:0}
+.card h3{font-size:18px; margin-bottom:4px}
+.card .sub{color:var(--ink-2); font-size:13.5px; margin-bottom:14px}
+.grid2{display:grid; gap:18px; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.grid3{display:grid; gap:18px; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+.hero{display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); align-items:center}
+
+.badge{display:inline-flex; align-items:center; gap:6px; font-family:var(--f-mono); font-size:11px; letter-spacing:.06em; padding:3px 9px; border-radius:99px; border:1px dashed var(--signal); color:var(--signal); text-transform:uppercase}
+.pill{display:inline-block; font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:99px; background:var(--surface-2); color:var(--ink-2); white-space:nowrap}
+.pill.good{background:var(--good-soft); color:var(--good)}
+.pill.warn{background:var(--warn-soft); color:var(--warn)}
+.pill.bad{background:var(--bad-soft); color:var(--bad)}
+.pill.sig{background:var(--signal-soft); color:var(--signal)}
+.pill.acc{background:var(--accent-soft); color:var(--accent)}
+
+.btn{border:1px solid var(--line); background:var(--surface); padding:8px 14px; border-radius:10px; cursor:pointer; font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:8px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.sm{padding:5px 10px; font-size:13px}
+.btn[disabled]{opacity:.5; cursor:not-allowed}
+.field{display:grid; gap:6px}
+.field label{font-size:12.5px; font-weight:600; color:var(--ink-2)}
+input[type=text],select,textarea{width:100%; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:9px 12px}
+textarea{resize:vertical; min-height:120px; line-height:1.5}
+input[type=range]{width:100%; accent-color:var(--accent)}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.row.sp{justify-content:space-between}
+
+/* gauge + stats */
+.gaugewrap{max-width:300px; margin-inline:auto; width:100%}
+.gauge text{fill:var(--ink)}
+.stats{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px}
+.stat{padding:14px 12px; border-radius:12px; background:var(--surface-2)}
+.stat b{display:block; font-family:var(--f-mono); font-size:26px; font-weight:500; line-height:1.1}
+.stat span{font-size:12.5px; color:var(--ink-2); line-height:1.3; display:block; margin-top:4px}
+.stat.sig b{color:var(--signal)}
+@media (max-width:560px){.stat b{font-size:19px; white-space:nowrap}.stat{padding:12px 10px}}
+
+/* skill rows */
+.srows{display:grid; gap:12px}
+.srow{display:grid; grid-template-columns:minmax(120px,190px) minmax(0,1fr) 62px; gap:12px; align-items:center}
+.sname{font-weight:500; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.strack{position:relative; height:10px; border-radius:6px; background:var(--surface-2); background-image:repeating-linear-gradient(90deg,transparent 0 calc(20% - 1px),var(--line) calc(20% - 1px) 20%)}
+.sfill{position:absolute; inset:0 auto 0 0; border-radius:6px; background:var(--accent)}
+.srow.ok .sfill{background:var(--good)}
+.smark{position:absolute; top:-5px; bottom:-5px; width:3px; margin-left:-1.5px; background:var(--ink); border-radius:2px}
+.sval{font-family:var(--f-mono); font-size:13px; text-align:right; color:var(--ink-2)}
+@media (max-width:560px){ .srow{grid-template-columns:minmax(0,1fr) 54px} .srow .strack{grid-column:1/-1; grid-row:2} }
+.legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--ink-2); margin-top:14px}
+.legend i{display:inline-block; width:14px; height:8px; border-radius:4px; background:var(--accent); margin-right:6px}
+.legend b{display:inline-block; width:3px; height:12px; background:var(--ink); margin-right:6px; vertical-align:-2px}
+
+/* tables */
+.tablewrap{overflow-x:auto}
+table{width:100%; border-collapse:collapse; font-size:14px}
+th{font-size:11.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-2); text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap}
+td{padding:10px; border-bottom:1px solid var(--line); vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--surface-2)}
+tbody tr.sel td{background:var(--accent-soft)}
+.minibar{display:inline-block; width:80px; height:7px; border-radius:4px; background:var(--surface-2); vertical-align:middle; margin-right:8px; overflow:hidden}
+.minibar i{display:block; height:100%; border-radius:4px}
+
+/* roadmap */
+.route{display:grid; gap:0; position:relative}
+.stop{display:grid; grid-template-columns:36px minmax(0,1fr); gap:14px; padding-bottom:18px; position:relative}
+.stop:last-child{padding-bottom:0}
+.stop::before{content:""; position:absolute; left:17px; top:36px; bottom:0; width:2px; background:repeating-linear-gradient(var(--line) 0 5px,transparent 5px 9px)}
+.stop:last-child::before{display:none}
+.wp{width:36px; height:36px; border-radius:50%; display:grid; place-items:center; font-family:var(--f-mono); font-weight:500; background:var(--surface-2); color:var(--ink); border:2px solid var(--line); z-index:1}
+.stop.first .wp{background:var(--signal); border-color:var(--signal); color:#fff}
+.stopbody{min-width:0}
+.stopbody h4{font-size:17px}
+.chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+.chip{font-size:12.5px; padding:3px 10px; border-radius:99px; border:1px solid var(--line); background:var(--surface); color:var(--ink-2)}
+.chip.btnlike{cursor:pointer}
+.chip.btnlike:hover{border-color:var(--accent); color:var(--ink)}
+.task{margin-top:8px; font-size:14px}
+
+/* detected skills */
+.found{display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr))}
+.fskill{border:1px solid var(--line); border-radius:12px; padding:10px 12px; display:grid; gap:4px}
+.fskill .top{display:flex; justify-content:space-between; gap:8px; align-items:baseline}
+.fskill b{font-weight:600}
+.fskill .maps{font-size:12px; color:var(--ink-2); overflow-wrap:anywhere}
+.lvl{font-family:var(--f-mono); font-size:12.5px}
+
+/* chat */
+.chatcard{display:flex; flex-direction:column; padding:0; overflow:hidden}
+.chathead{padding:16px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center}
+.msgs{padding:18px 20px; display:grid; gap:14px; max-height:min(58vh,560px); min-height:280px; overflow-y:auto; align-content:start}
+.msg{max-width:min(100%,640px); min-width:0}
+.msg.user{justify-self:end}
+.bubble{padding:10px 14px; border-radius:14px; overflow-wrap:anywhere}
+.msg.user .bubble{background:var(--accent); color:var(--on-accent); border-bottom-right-radius:4px}
+.msg.bot .bubble{background:var(--surface-2); border-bottom-left-radius:4px}
+.msg.human .bubble{background:var(--signal-soft); border-bottom-left-radius:4px}
+.route-tag{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:5px; font-size:12px; color:var(--ink-2)}
+.srcs{display:grid; gap:6px; margin-top:10px}
+details.src{border:1px solid var(--line); border-radius:10px; background:var(--surface); padding:6px 10px; font-size:13px}
+details.src summary{cursor:pointer; list-style:none; display:flex; gap:8px; align-items:center}
+details.src summary::-webkit-details-marker{display:none}
+details.src p{margin-top:6px; color:var(--ink-2); font-size:13px}
+.conf{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-2)}
+.conf i{display:inline-block; width:46px; height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden}
+.conf i b{display:block; height:100%; background:var(--good)}
+.feedback{display:flex; gap:6px; margin-top:8px; align-items:center; font-size:12px; color:var(--ink-2)}
+.feedback button{border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:2px 8px; cursor:pointer}
+.feedback button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
+.composer{border-top:1px solid var(--line); padding:14px 20px; display:grid; gap:10px}
+.composer .row{flex-wrap:nowrap}
+.typing{display:inline-flex; gap:4px; padding:4px 0}
+.typing i{width:6px; height:6px; border-radius:50%; background:var(--ink-2); animation:blink 1s infinite ease-in-out}
+.typing i:nth-child(2){animation-delay:.15s} .typing i:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+/* misc */
+.toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:10px; font-size:14px; z-index:30; max-width:calc(100vw - 32px); box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.divider{height:1px; background:var(--line); border:0; margin:16px 0}
+.list{display:grid; gap:0}
+.list > div{padding:12px 0; border-bottom:1px solid var(--line); display:grid; gap:4px}
+.list > div:last-child{border-bottom:0}
+.hist{width:100%; height:auto; display:block}
+.hist text{fill:var(--ink-2); font-family:var(--f-mono); font-size:10px}
+.bars{display:grid; gap:10px}
+.hbar{display:grid; grid-template-columns:minmax(110px,170px) minmax(0,1fr) 34px; gap:10px; align-items:center; font-size:13.5px}
+.hbar .t{height:12px; border-radius:6px; background:var(--surface-2); overflow:hidden}
+.hbar .t i{display:block; height:100%; background:var(--accent); border-radius:6px}
+.hbar .v{font-family:var(--f-mono); text-align:right; color:var(--ink-2)}
+.cols{display:flex; gap:8px; align-items:flex-end; height:140px; padding-top:6px}
+.col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; height:100%; min-width:0}
+.col i{display:block; width:100%; border-radius:6px 6px 2px 2px; background:var(--accent); min-height:3px}
+.col span{font-family:var(--f-mono); font-size:11px; color:var(--ink-2)}
+.col em{font-style:normal; font-family:var(--f-mono); font-size:11px}
+.formula{font-family:var(--f-mono); background:var(--surface-2); border-radius:10px; padding:10px 14px; font-size:13.5px; overflow-x:auto; white-space:nowrap}
+.pipeline{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr)); counter-reset:p}
+.pipeline > div{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface)}
+.pipeline b{display:block; font-family:var(--f-display); margin-bottom:2px}
+.pipeline span{font-size:13px; color:var(--ink-2)}
+.empty{padding:24px; text-align:center; color:var(--ink-2); border:1px dashed var(--line); border-radius:12px}
+footer{grid-column:1/-1; color:var(--ink-2); font-size:12.5px; border-top:1px solid var(--line); padding-top:14px}
+@media (prefers-reduced-motion:reduce){ *{animation:none!important; transition:none!important} }
+</style>
+
+<div id="app"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+//#LOGIC_START
+/* ---------- Taxonomy: skills, synonyms, resources ---------- */
+const SKILLS = {
+  sql:{name:'SQL', syn:['sql','mysql','postgresql','postgres','sqlite','t-sql','pl/sql','window functions'],
+    res:['Kaggle Learn: Intro to SQL','Mode SQL Tutorial'], task:'Answer 10 business questions on a sample sales database using JOIN, GROUP BY and window functions.'},
+  python:{name:'Python', syn:['python'], res:['Kaggle Learn: Python','CS50P (Harvard, free)'], task:'Solve 20 practice problems, then build a small command-line tool.'},
+  prog:{name:'Core programming', syn:['java','c++','c#','python','kotlin','golang','c programming'], res:['NPTEL programming courses','HackerRank language tracks'], task:'Implement a library-management console app from scratch.'},
+  dsa:{name:'Data structures & algorithms', syn:['data structures','dsa','algorithms','leetcode','competitive programming','codechef','codeforces'], res:['NPTEL: Data Structures and Algorithms','LeetCode Top Interview 150'], task:'Solve three problems a week across arrays, trees and graphs, and explain each one aloud.'},
+  oop:{name:'Object-oriented design', syn:['oop','object-oriented','object oriented','design patterns'], res:['NPTEL: Object-oriented programming','Refactoring Guru: design patterns'], task:'Model a campus-event system with classes, interfaces and two design patterns.'},
+  dbms:{name:'Database systems', syn:['dbms','database management','normalization','normalisation','mongodb','database design','rdbms'], res:['NPTEL: Database Management System','GeeksforGeeks DBMS notes'], task:'Normalise a sample schema to 3NF and write the transactions it needs.'},
+  os:{name:'Operating systems', syn:['operating system','operating systems'], res:['NPTEL: Operating Systems','OSTEP (free textbook)'], task:'Write notes on scheduling, deadlock and paging with one worked example each.'},
+  network:{name:'Computer networks', syn:['computer networks','computer networking','networking','tcp/ip','tcp','ccna'], res:['NPTEL: Computer Networks','Cisco Networking Academy intro courses'], task:'Trace one HTTP request end to end in Wireshark and describe each layer.'},
+  git:{name:'Git & version control', syn:['git','github','gitlab','version control'], res:['Pro Git book (free)','GitHub Skills'], task:'Send a pull request to a classmate repository and resolve one merge conflict.'},
+  linux:{name:'Linux & shell', syn:['linux','ubuntu','bash','shell scripting'], res:['Linux Journey','OverTheWire: Bandit'], task:'Automate a backup with a shell script and a cron job.'},
+  docker:{name:'Docker & containers', syn:['docker','kubernetes','containers','containerization','containerisation'], res:['Docker Get Started guide','Play with Docker'], task:'Containerise a two-service app with Docker Compose.'},
+  cicd:{name:'CI/CD pipelines', syn:['ci/cd','jenkins','github actions','gitlab ci','pipeline'], res:['GitHub Actions documentation','Jenkins user handbook'], task:'Create a pipeline that tests, builds and deploys a sample app on every push.'},
+  cloud:{name:'Cloud platforms', syn:['aws','azure','gcp','google cloud','cloud computing','ec2'], res:['AWS Cloud Practitioner Essentials','Microsoft Learn: Azure Fundamentals'], task:'Deploy a static site and a small API on a free-tier cloud account.'},
+  html:{name:'HTML & CSS', syn:['html','css','html5','css3','bootstrap','tailwind'], res:['MDN: Learn web development','freeCodeCamp: Responsive Web Design'], task:'Build a responsive three-page site without a framework.'},
+  js:{name:'JavaScript', syn:['javascript','typescript','es6','ajax'], res:['javascript.info','freeCodeCamp: JavaScript Algorithms'], task:'Build a to-do app that uses fetch calls and DOM updates.'},
+  react:{name:'React', syn:['react','react.js','reactjs','next.js','redux'], res:['react.dev documentation','Scrimba: Learn React'], task:'Build a multi-page dashboard with routing and shared state.'},
+  node:{name:'Node.js & backend', syn:['node.js','nodejs','express','backend development','spring boot','django','flask','fastapi'], res:['Node.js official guides','The Odin Project: NodeJS'], task:'Build an authenticated notes API backed by a database.'},
+  rest:{name:'REST APIs', syn:['rest api','rest apis','restful','api development','postman'], res:['MDN: HTTP overview','Postman Learning Center'], task:'Design and document a REST API with a Postman collection.'},
+  stats:{name:'Statistics', syn:['statistics','statistical','hypothesis testing','probability','regression analysis','a/b testing'], res:['Khan Academy: Statistics and probability','NPTEL: Probability and Statistics'], task:'Run a hypothesis test and a regression on a public dataset and explain the result in plain language.'},
+  ml:{name:'Machine learning', syn:['machine learning','scikit-learn','sklearn','supervised learning','random forest','xgboost'], res:['Machine Learning Specialization (Andrew Ng)','scikit-learn user guide'], task:'Train, tune and compare three models on a Kaggle tabular dataset.'},
+  dl:{name:'Deep learning', syn:['deep learning','neural network','neural networks','tensorflow','pytorch','keras','cnn','lstm'], res:['fast.ai: Practical Deep Learning','Deep Learning Specialization'], task:'Fine-tune a small image or text classifier and report where it fails.'},
+  clean:{name:'Data cleaning', syn:['data cleaning','data cleansing','data wrangling','data preprocessing','data preparation','data munging'], res:['Kaggle Learn: Data Cleaning','pandas user guide'], task:'Clean a messy public dataset and document every decision you make.'},
+  viz:{name:'Data visualization', syn:['data visualization','data visualisation','matplotlib','seaborn','plotly','visualization','visualisation'], res:['Kaggle Learn: Data Visualization','Storytelling with Data (book)'], task:'Redesign three charts from a news article and write why each change helps.'},
+  bi:{name:'BI tools (Power BI / Tableau)', syn:['power bi','powerbi','tableau','looker','qlik','dax'], res:['Microsoft Learn: Power BI','Tableau Public training videos'], task:'Publish a dashboard with filters, KPIs and a short written insight.'},
+  excel:{name:'Excel', syn:['excel','spreadsheets','pivot table','pivot tables','vlookup'], res:['Microsoft Excel training videos','ExcelIsFun on YouTube'], task:'Build a monthly budget model with pivot tables, lookups and conditional formatting.'},
+  comm:{name:'Communication', syn:['communication','presentation skills','public speaking','technical writing','spoken english','teamwork','leadership','led a team'], res:['Placement cell communication training','Mock-interview sessions with mentors'], task:'Record a two-minute self-introduction and a project explanation, then get one mentor review.'},
+  sysdesign:{name:'System design basics', syn:['system design','high-level design','scalability','microservices'], res:['System Design Primer (GitHub)','ByteByteGo newsletter'], task:'Sketch the design of a URL shortener and a campus notice board.'}
+};
+const ROLES = {
+  analyst:{name:'Data Analyst', alias:['data analyst','analyst','analytics'], skills:[{id:'sql',w:5,t:4},{id:'python',w:4,t:3},{id:'stats',w:4,t:3},{id:'excel',w:3,t:4},{id:'viz',w:4,t:3},{id:'bi',w:3,t:3},{id:'clean',w:3,t:3}]},
+  ds:{name:'Data Scientist', alias:['data scientist','data science','scientist','ml engineer'], skills:[{id:'python',w:5,t:4},{id:'stats',w:5,t:4},{id:'ml',w:5,t:4},{id:'sql',w:3,t:3},{id:'clean',w:4,t:4},{id:'viz',w:3,t:3},{id:'dl',w:3,t:3},{id:'comm',w:2,t:3}]},
+  sde:{name:'Software Developer', alias:['software developer','software engineer','sde','developer','programmer'], skills:[{id:'dsa',w:5,t:4},{id:'prog',w:4,t:4},{id:'oop',w:4,t:3},{id:'dbms',w:3,t:3},{id:'os',w:3,t:3},{id:'git',w:2,t:3},{id:'sql',w:3,t:3},{id:'network',w:2,t:2},{id:'comm',w:3,t:3}]},
+  web:{name:'Web Developer', alias:['web developer','web','frontend','full stack','full-stack'], skills:[{id:'html',w:4,t:4},{id:'js',w:5,t:4},{id:'react',w:4,t:3},{id:'node',w:4,t:3},{id:'rest',w:3,t:3},{id:'sql',w:3,t:3},{id:'git',w:3,t:3},{id:'comm',w:2,t:3}]},
+  cloud:{name:'Cloud & DevOps Engineer', alias:['devops','cloud engineer','cloud','sre'], skills:[{id:'linux',w:5,t:4},{id:'docker',w:5,t:3},{id:'git',w:4,t:3},{id:'cicd',w:4,t:3},{id:'cloud',w:5,t:3},{id:'network',w:4,t:3},{id:'python',w:3,t:3}]}
+};
+const PREREQ = {bi:['viz','sql'], viz:['excel'], ml:['python','stats'], dl:['ml'], react:['js','html'], node:['js'], rest:['node'], docker:['linux'], cicd:['git','docker'], cloud:['linux','network'], sysdesign:['dbms','network'], oop:['prog'], dsa:['prog']};
+const LEVEL_WORDS = ['None','Aware','Basic','Working','Proficient','Expert'];
+const PRIORITY_MIN = 6;
+
+/* ---------- PlacementGap AI 2.0 ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rxEsc = s => s.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
+const MOD_HI = /\b(advanced|expert|proficient|strong|extensive|deep|fluent|certified)\b/;
+const MOD_LO = /\b(basic|basics|beginner|familiar|familiarity|exposure|learning|introductory)\b/;
+const CTX = /\b(built|developed|designed|created|implemented|deployed|led|analysed|analyzed|intern|internship|project|worked|automated|trained|published)\b/;
+
+function extractSkills(text){
+  const sentences = String(text).toLowerCase().split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
+  const found = {};
+  for (const [id, sk] of Object.entries(SKILLS)) {
+    let count = 0, mod = false, low = false, ctx = false; const via = new Set();
+    for (const sy of sk.syn) {
+      const re = new RegExp('(?<![a-z0-9+#.])' + rxEsc(sy) + '(?![a-z0-9+#])', 'g');
+      for (const s of sentences) {
+        const m = s.match(re);
+        if (!m) continue;
+        count += m.length; via.add(sy);
+        if (MOD_HI.test(s)) mod = true;
+        if (MOD_LO.test(s)) low = true;
+        if (CTX.test(s)) ctx = true;
+      }
+    }
+    if (!count) continue;
+    let lv = 1 + (count >= 2 ? 1 : 0) + (count >= 4 ? 1 : 0) + (mod ? 1 : 0) + (ctx ? 1 : 0);
+    if (low) lv = Math.min(lv, 2);
+    found[id] = {level: Math.min(5, lv), mentions: count, via: [...via]};
+  }
+  return found;
+}
+function readiness(roleId, levels){
+  const role = ROLES[roleId]; let num = 0, den = 0;
+  const rows = role.skills.map(k => {
+    const s = levels[k.id] || 0, f = Math.min(s / k.t, 1), gap = Math.max(k.t - s, 0);
+    num += k.w * f; den += k.w;
+    return {id:k.id, name:SKILLS[k.id].name, w:k.w, s, t:k.t, f, gap, pr:k.w * gap};
+  });
+  const raw = 100 * num / den;
+  const sorted = [...rows].sort((a,b) => b.pr - a.pr || b.w - a.w);
+  return {score:Math.round(raw), raw, rows, atTarget:rows.filter(r => r.s >= r.t).length, below:rows.filter(r => r.s < r.t).length,
+    priority:sorted.filter(r => r.pr >= PRIORITY_MIN)};
+}
+function buildRoadmap(roleId, levels){
+  const rd = readiness(roleId, levels), gaps = rd.rows.filter(r => r.s < r.t), ids = new Set(gaps.map(g => g.id));
+  const indeg = {}; gaps.forEach(g => indeg[g.id] = (PREREQ[g.id] || []).filter(p => ids.has(p)).length);
+  const avail = gaps.filter(g => indeg[g.id] === 0), order = [];
+  while (avail.length) {
+    avail.sort((a,b) => b.pr - a.pr || b.w - a.w);
+    const n = avail.shift(); order.push(n);
+    gaps.forEach(g => { if ((PREREQ[g.id] || []).includes(n.id) && --indeg[g.id] === 0) avail.push(g); });
+  }
+  return order.map(n => ({...n, after:(PREREQ[n.id] || []).filter(p => ids.has(p)), weeks:Math.ceil((n.t - n.s) * 1.5)}));
+}
+function roleFit(levels){
+  return Object.keys(ROLES).map(id => ({id, name:ROLES[id].name, score:readiness(id, levels).score})).sort((a,b) => b.score - a.score);
+}
+function band(score){ return score >= 75 ? {k:'good', t:'On track'} : score >= 50 ? {k:'warn', t:'Needs support'} : {k:'bad', t:'At risk'}; }
+
+/* ---------- CampusConnect AI: chunk, index, retrieve (BM25), grounded answer ---------- */
+const STOP = new Set('a an the is are was were be been to of in on for and or with my i me do does did how what when where which who whom can could will should would it its this that these those at by from as about if am there their your our we you any get have has had than then so not no please tell much many'.split(' '));
+const NORM = [[/\bexams?\b/g,'examination'],[/\bbacklogs?\b/g,'arrear'],[/\bod\b/g,'on-duty'],[/\bminimum\b/g,'minimum least'],[/\bduplicate\b/g,'duplicate lost'],[/\bcgpa\b/g,'cgpa'],[/\bbooks?\b/g,'book'],[/\bclose\b/g,'closes open timings'],[/\bpass\b/g,'pass']];
+function stem(w){
+  if (w.length > 4 && w.endsWith('ies')) w = w.slice(0,-3) + 'y';
+  else if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0,-1);
+  if (w.length > 5 && w.endsWith('ing')) w = w.slice(0,-3);
+  else if (w.length > 4 && w.endsWith('ed')) w = w.slice(0,-2);
+  if (w.length > 4 && w.endsWith('e')) w = w.slice(0,-1);
+  return w;
+}
+function tok(s){ return (String(s).toLowerCase().match(/[a-z0-9]+/g) || []).filter(w => !STOP.has(w)).map(stem); }
+function normQuery(q){ let s = String(q).toLowerCase(); NORM.forEach(([re, to]) => s = s.replace(re, to)); return s; }
+
+const SAMPLE_DOCS = [
+ {id:'placement', title:'Placement Eligibility and Process Circular', date:'2026-08-18', owner:'Placement Cell', sections:[
+  ['Eligibility','Final-year students are eligible to sit for campus drives if they have no standing arrears at the time of the drive and a minimum CGPA of 6.5 up to the previous semester. Students with a history of arrears may appear only where the company criteria allow it.'],
+  ['Registration','Students must register on the placement portal before the stated deadline and keep their resume updated in the college format. Registration is required separately for each drive.'],
+  ['Offers and further drives','A student placed in the Regular category may attend one higher-category drive. A student who accepts a Dream offer may continue to attend other Dream drives. Students must inform the placement cell before attending any further drive.'],
+  ['Conduct at drives','Students must wear formal attire and reach the venue thirty minutes before the reporting time. Absence from a drive without prior permission may lead to debarment from the next two drives.']]},
+ {id:'attendance', title:'Attendance and Condonation Regulations', date:'2026-06-10', owner:'Examination Cell', sections:[
+  ['Minimum attendance','A student must have at least 75 percent attendance in each semester, counted across all courses, to be allowed to write the end semester examinations.'],
+  ['Condonation','Students with attendance between 65 and 74 percent may apply for condonation with a valid medical certificate or an approved reason, and must pay the condonation fee notified by the examination cell. Students below 65 percent are not eligible and must repeat the semester.'],
+  ['On-duty attendance','Attendance for approved on-duty such as inter-college events, sports and placement drives is added to the total, up to a maximum of 10 percent of working days.'],
+  ['Updates','Attendance is updated on the student portal every week. Students should report errors to the class advisor within seven days.']]},
+ {id:'exam', title:'Examination and Arrear Regulations', date:'2026-05-30', owner:'Examination Cell', sections:[
+  ['Passing criteria','A student must secure at least 45 percent in the end semester examination and 50 percent overall to pass a theory course. Internal assessment carries 40 percent and the end semester examination carries 60 percent.'],
+  ['Arrear papers','A course not cleared in the regular attempt becomes an arrear. Arrear examinations are conducted along with the next semester examinations. Students may appear for arrear papers up to the maximum duration of the programme.'],
+  ['Revaluation','Revaluation can be requested within five days of result publication by paying the prescribed fee for each paper. The marks after revaluation are final.'],
+  ['Hall ticket','Hall tickets are released on the student portal three days before the first examination. Students must carry the hall ticket and the college ID card to every examination.']]},
+ {id:'scholarship', title:'Scholarships and Fee Concession Circular', date:'2026-07-02', owner:'Accounts Office', sections:[
+  ['Government scholarships','Students from eligible categories can apply for state and central government scholarships through the official portals. The scholarship cell collects income and community certificates and verifies applications before the portal deadline.'],
+  ['Merit concession','The college offers a merit concession to students who obtain a CGPA of 9.0 or above in the previous year. Applications are submitted to the office with the mark statement before the end of the first month of the semester.'],
+  ['Fee payment','Tuition fee is paid in two instalments each academic year, the first at admission or reopening and the second at the start of the even semester. A late fee applies after the due date. Fees can be paid at the accounts office or through the online payment link shared by the office.'],
+  ['First graduate','First-graduate students must submit the first graduate certificate at the beginning of the year to receive the notified concession.']]},
+ {id:'internship', title:'Internship and On-Duty Permission Rules', date:'2026-07-20', owner:'Training and Placement', sections:[
+  ['Internship approval','Students may undertake internships during vacations or, with approval, during the semester. The department internship coordinator must approve the offer letter before the internship begins.'],
+  ['On-duty requests','On-duty requests must be submitted through the class advisor at least three days before the event, with an invitation or offer letter. The head of the department approves the request.'],
+  ['Completion report','After an internship the student submits a completion certificate and a short report within two weeks of returning to college. Certificates are recorded in the student profile.'],
+  ['Internship credit','Approved internships of at least four weeks may be considered for the internship credit in the curriculum.']]},
+ {id:'library', title:'Library and Laboratory Usage Guidelines', date:'2026-06-25', owner:'Library', sections:[
+  ['Library timings','The central library is open from 8:30 AM to 6:00 PM on working days and until 1:00 PM on Saturdays. The reading hall stays open until 8:00 PM during examination weeks.'],
+  ['Borrowing books','UG students can borrow up to four books for fourteen days. A book can be renewed once if no other member has reserved it. A fine is charged for each day of delay.'],
+  ['Digital resources','Students can access e-journals and NPTEL material from campus computers using their college login.'],
+  ['Laboratory access','Laboratory access outside class hours requires written permission from the lab in-charge. Food and drinks are not allowed inside laboratories.']]},
+ {id:'hostel', title:'Hostel and Transport FAQ', date:'2026-06-15', owner:'Warden and Transport Office', sections:[
+  ['Hostel rules','Hostel admission is processed by the warden office after the admission fee is paid. Rooms are allotted by year and department. Students must return to the hostel before 8:00 PM unless they hold a signed exit permission.'],
+  ['Visitors','Parents and registered guardians may visit on Sundays between 10:00 AM and 5:00 PM and must sign the visitor register.'],
+  ['Bus pass and routes','College buses run on notified routes. Students must apply for a bus pass at the transport office at the start of the academic year and carry it on every trip. Route changes are announced on the notice board.'],
+  ['Mess','The mess menu is revised every month with inputs from the mess committee. Complaints can be written in the mess register or raised with the warden.']]},
+ {id:'grievance', title:'Grievance Redressal and Student Support FAQ', date:'2026-05-12', owner:'Student Affairs', sections:[
+  ['Grievances','Students can submit grievances in writing to the grievance cell or through the suggestion box. The cell acknowledges a grievance within three working days and aims to resolve it within fifteen working days.'],
+  ['Anti-ragging','Ragging is strictly prohibited. Complaints can be made to the anti-ragging committee at any time, and the identity of the complainant is kept confidential.'],
+  ['Counselling','The counselling centre offers confidential sessions on academic stress and personal concerns. Students can book a slot with the counsellor through the department office.'],
+  ['ID card','A lost ID card must be reported to the office. A duplicate ID card is issued after the prescribed fee is paid and an application signed by the class advisor is submitted.']]}
+];
+const SELF_TEST = [
+ ['What is the minimum attendance required to write exams?','attendance'],
+ ['Can I apply for condonation if I have 70 percent attendance?','attendance'],
+ ['Do I need a minimum CGPA to attend campus drives?','placement'],
+ ['How do I apply for revaluation?','exam'],
+ ['When does the library close on Saturday?','library'],
+ ['How many books can I borrow?','library'],
+ ['What time must I return to the hostel?','hostel'],
+ ['How do I get a bus pass?','hostel'],
+ ['How do I get a duplicate ID card?','grievance'],
+ ['What is the process for internship approval?','internship'],
+ ['Where do I apply for scholarships?','scholarship'],
+ ['How do I report ragging?','grievance']
+];
+const CONF_MIN = 0.45;
+
+let INDEX = {chunks:[], df:{}, N:0, avgdl:1};
+function buildIndex(docs){
+  const chunks = [];
+  docs.forEach(d => d.sections.forEach(([sec, text]) => {
+    const t = tok(sec + ' ' + text); const tf = {};
+    t.forEach(w => tf[w] = (tf[w] || 0) + 1);
+    chunks.push({docId:d.id, title:d.title, sec, text, len:t.length, tf});
+  }));
+  const df = {}; chunks.forEach(c => Object.keys(c.tf).forEach(w => df[w] = (df[w] || 0) + 1));
+  const N = chunks.length; INDEX = {chunks, df, N, avgdl: chunks.reduce((a,c) => a + c.len, 0) / Math.max(N,1) || 1};
+}
+function idf(w){ const n = INDEX.df[w] || 0; return Math.log(1 + (INDEX.N - n + 0.5) / (n + 0.5)); }
+function searchCampus(q, k = 3){
+  const qt = [...new Set(tok(normQuery(q)))];
+  if (!qt.length || !INDEX.N) return {hits:[], conf:0, qt};
+  const k1 = 1.5, b = 0.75, totalIdf = qt.reduce((a,w) => a + idf(w), 0) || 1;
+  const scored = INDEX.chunks.map(c => {
+    let sc = 0, cov = 0;
+    qt.forEach(w => { const f = c.tf[w]; if (!f) return; const i = idf(w); cov += i;
+      sc += i * (f * (k1 + 1)) / (f + k1 * (1 - b + b * c.len / INDEX.avgdl)); });
+    return {chunk:c, score:sc, cov:cov / totalIdf};
+  }).filter(h => h.score > 0).sort((a,b2) => b2.score - a.score);
+  const hits = scored.slice(0, k);
+  return {hits, conf: hits.length ? Math.min(1, hits[0].cov) : 0, qt};
+}
+function sentences(t){ return t.split(/(?<=[.!?])\s+/).filter(Boolean); }
+function answerCampus(q){
+  const r = searchCampus(q);
+  if (!r.hits.length || r.conf < CONF_MIN) return {ok:false, conf:r.conf, hits:r.hits};
+  const qs = new Set(r.qt), picks = [], used = [];
+  const top = r.hits[0];
+  const scoredS = sentences(top.chunk.text).map((s, i) => ({s, i, v: tok(s).filter(w => qs.has(w)).length}));
+  const best = [...scoredS].sort((a,b) => b.v - a.v || a.i - b.i).filter(x => x.v > 0).slice(0, 2).sort((a,b) => a.i - b.i);
+  const first = (best.length ? best : scoredS.slice(0,1)).map(x => x.s).join(' ');
+  picks.push(first + ' [1]'); used.push(top);
+  const second = r.hits.find(h => h.chunk.docId !== top.chunk.docId && h.cov >= CONF_MIN && h.score >= 0.6 * top.score);
+  if (second) {
+    const ss = sentences(second.chunk.text).map(s => ({s, v: tok(s).filter(w => qs.has(w)).length})).sort((a,b) => b.v - a.v)[0];
+    if (ss && ss.v > 0) { picks.push(ss.s + ' [2]'); used.push(second); }
+  }
+  return {ok:true, text:picks.join(' '), sources:used.map(h => h.chunk), conf:r.conf, hits:r.hits};
+}
+function runSelfTest(k = 3){
+  let hit = 0, rr = 0; const rows = [];
+  SELF_TEST.forEach(([q, exp]) => {
+    const r = searchCampus(q, k); const idx = r.hits.findIndex(h => h.chunk.docId === exp);
+    if (idx >= 0) { hit++; rr += 1 / (idx + 1); }
+    rows.push({q, exp, got: r.hits[0] ? r.hits[0].chunk.docId : '-', rank: idx + 1});
+  });
+  return {recall: hit / SELF_TEST.length, mrr: rr / SELF_TEST.length, k, n: SELF_TEST.length, rows};
+}
+
+/* ---------- Router: career questions to PlacementGap, campus questions to CampusConnect ---------- */
+const CAREER_RX = /\b(skill|skills|role|resume|cv|roadmap|readiness|ready|gap|gaps|interview|learn|improve|career|job|score|missing|lack|certif\w*|analyst|scientist|developer|devops|prepare|preparation|study|plan)\b/g;
+const CAMPUS_RX = /\b(attendance|exam\w*|arrear\w*|backlog\w*|fee|fees|hostel|library|scholarship\w*|bus|transport|internship|circular|rule|rules|regulation\w*|timing\w*|id card|grievance|ragging|mess|eligib\w*|condonation|revaluation|hall ticket|cgpa|campus|drive|drives|od|on-duty|lab|canteen|visitor\w*|counsel\w*)\b/g;
+function routeQuestion(q){
+  const s = q.toLowerCase(), c = (s.match(CAREER_RX) || []).length, m = (s.match(CAMPUS_RX) || []).length;
+  if (/\b(my (skills?|score|gaps?|readiness|roadmap|resume|profile)|which role|best role|am i ready)\b/.test(s)) return 'career';
+  return c > m ? 'career' : 'campus';
+}
+function findRole(q, fallback){
+  const s = q.toLowerCase();
+  for (const [id, r] of Object.entries(ROLES)) if (r.alias.some(a => new RegExp('\\b' + rxEsc(a) + '\\b').test(s))) return id;
+  return fallback;
+}
+function answerCareer(q, S){
+  const s = q.toLowerCase(), roleId = findRole(q, S.target), role = ROLES[roleId], rd = readiness(roleId, S.levels);
+  const src = [{kind:'role', title:'Role profile: ' + role.name, text:'Required skills and target levels for ' + role.name + ', built from public job descriptions.'},
+               {kind:'profile', title:'Your skill profile', text:'Levels detected from your resume and adjusted by you.'}];
+  const fmt = r => SKILLS[r.id].name + ' (level ' + r.s + ', target ' + r.t + ')';
+  if (/\b(which role|best role|suited|fit|suit)\b/.test(s)) {
+    const f = roleFit(S.levels);
+    return {text:'Your closest role fit is ' + f[0].name + ' at ' + f[0].score + '/100, followed by ' + f.slice(1,3).map(x => x.name + ' (' + x.score + ')').join(' and ') + '. [Source: role profiles]', sources:src, conf:.9};
+  }
+  if (/\b(roadmap|plan|learn|study|prepare|preparation|improve|start|first)\b/.test(s)) {
+    const rm = buildRoadmap(roleId, S.levels).slice(0, 3);
+    if (!rm.length) return {text:'You meet every target for ' + role.name + '. A good next step is a mock interview with a mentor. [Source: role profile]', sources:src, conf:.9};
+    return {text:'For ' + role.name + ', start here: ' + rm.map((r,i) => (i + 1) + '. ' + r.name + ' from level ' + r.s + ' to ' + r.t + ' (about ' + r.weeks + ' weeks)').join('; ') + '. Open PlacementGap for resources and practice tasks. [Source: role profile]', sources:src, conf:.9};
+  }
+  if (/\b(score|readiness|ready|how am i)\b/.test(s))
+    return {text:'Your readiness for ' + role.name + ' is ' + rd.score + '/100 (' + band(rd.score).t.toLowerCase() + '). ' + rd.atTarget + ' of ' + rd.rows.length + ' skills are at target and ' + rd.priority.length + ' are priority gaps. [Source: role profile]', sources:src, conf:.9};
+  const gaps = rd.rows.filter(r => r.s < r.t).sort((a,b) => b.pr - a.pr);
+  if (!gaps.length) return {text:'You meet every target skill for ' + role.name + '. [Source: role profile]', sources:src, conf:.9};
+  return {text:'For ' + role.name + ', these skills are below target: ' + gaps.slice(0,4).map(fmt).join('; ') + (gaps.length > 4 ? '; and ' + (gaps.length - 4) + ' more' : '') + '. Priority gaps are ' + (rd.priority.length ? rd.priority.map(p => p.name).join(' and ') : 'none right now') + '. [Source: role profile]', sources:src, conf:.9};
+}
+//#LOGIC_END
+
+/* ---------- Sample data ---------- */
+const SAMPLE_RESUME = `Priya S | B.Tech Artificial Intelligence and Data Science, III year | V.S.B College of Engineering Technical Campus
+
+Skills: Python, SQL, Excel, Statistics, Power BI, Matplotlib, Data cleaning, Git
+
+Projects
+Student attendance analyser: built in Python for a department project. It used data cleaning steps on the register data and charted trends with Matplotlib.
+Campus canteen report: made a Power BI view of weekly sales.
+Coursework: basic SQL queries in the DBMS lab; used Excel for lab record calculations. Applied statistics such as mean and correlation in the coursework.`;
+const SAMPLE_LEVELS = {python:3, sql:2, excel:2, stats:2, viz:2, bi:2, clean:2, git:1, dbms:1};
+const SAMPLE_HISTORY = [{d:'2026-08-12', s:48},{d:'2026-09-05', s:56},{d:'2026-09-28', s:61},{d:'2026-10-24', s:67}];
+
+function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function makeCohort(){
+  const names = ['Aarthi M','Karthik R','Divya S','Harini V','Surya P','Meenakshi T','Vignesh K','Lakshmi N','Arun Kumar B','Sowmiya D','Praveen G','Janani A','Dinesh R','Keerthana L','Gokul S','Nisha F'];
+  const roles = ['analyst','ds','sde','web','cloud','analyst','sde','ds','web','analyst','sde','cloud','ds','analyst','web','sde'];
+  const active = ['Today','Today','Yesterday','2 days ago','3 days ago','Today','5 days ago','Yesterday','1 week ago','2 days ago','Today','4 days ago','Yesterday','3 days ago','6 days ago','Today'];
+  const r = rng(2610);
+  return names.map((n, i) => {
+    const role = ROLES[roles[i]], f = 0.5 + r() * 0.62, levels = {};
+    role.skills.forEach(k => levels[k.id] = Math.max(0, Math.min(5, Math.round(k.t * f + (r() - .5) * 1.6))));
+    return {name:n, role:roles[i], levels, active:active[i], year:'III year, AI & DS'};
+  });
+}
+const COHORT = makeCohort();
+
+/* ---------- State ---------- */
+const KEY = 'campuspilot.v1';
+function defaults(){ return {role:'student', view:'home', name:'Priya S', target:'analyst', resume:SAMPLE_RESUME, levels:{...SAMPLE_LEVELS}, history:SAMPLE_HISTORY.map(x => ({...x})), isSample:true, userDocs:[], notes:{}, theme:null}; }
+let S = defaults();
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(defaults(), JSON.parse(raw)); } catch (e) {}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+if (S.theme) document.documentElement.setAttribute('data-theme', S.theme);
+
+const T = {chat:[], typing:false, found:null, selStudent:null, sortBy:'score', filterRole:'all', campusAns:null, campusQ:'', selfTest:null, cohortFilter:'all',
+  queue:[{id:1, who:'Student (sample)', q:'Is the Zoho aptitude test date for November confirmed?', at:'Today, 09:40', status:'open', reply:'', sample:true}],
+  M:{answers:0, grounded:0, escalated:0, up:0, down:0, lat:[]}};
+T.chat.push({id:0, role:'bot', route:'welcome', text:'Hi, I am CampusPilot. Ask me about your skills, your readiness for a role, or any campus rule, and I will route it to the right module and cite where the answer came from.'});
+
+function allDocs(){ return SAMPLE_DOCS.concat(S.userDocs); }
+function reindex(){ buildIndex(allDocs()); }
+reindex();
+
+/* ---------- Views ---------- */
+const NAVS = {
+  student:[['home','Dashboard','home'],['gap','PlacementGap AI','target'],['campus','CampusConnect AI','book'],['chat','Assistant','chat'],['about','How it works','info']],
+  mentor:[['cohort','Cohort','users'],['queue','Review queue','inbox'],['chat','Assistant','chat'],['about','How it works','info']],
+  cell:[['analytics','Analytics','chart'],['docs','Campus documents','file'],['queue','Review queue','inbox'],['about','How it works','info']]
+};
+const FIRST = {student:'home', mentor:'cohort', cell:'analytics'};
+const ICONS = {
+  home:'<path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  book:'<path d="M4 4h12a3 3 0 013 3v13H7a3 3 0 01-3-3z"/><path d="M4 17a3 3 0 013-3h12"/>',
+  chat:'<path d="M4 5h16v11H9l-5 4z"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14.2c2.2.7 3.5 2.6 3.5 5.8"/>',
+  inbox:'<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 3h6l1-3h5"/>',
+  chart:'<path d="M4 20V4M4 20h16M8 16v-5M13 16V8M18 16v-3"/>',
+  file:'<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  plane:'<path d="M3 11l18-8-8 18-2-8z"/>',
+  moon:'<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>',
+  send:'<path d="M3 11l18-8-8 18-2-8z"/>',
+  check:'<path d="M5 12l5 5 9-10"/>'
+};
+const ic = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+
+function gauge(score){
+  const R = 86, cx = 110, cy = 104, col = score >= 75 ? 'var(--good)' : score >= 50 ? 'var(--warn)' : 'var(--bad)';
+  let ticks = '';
+  for (let i = 0; i <= 20; i++) {
+    const a = Math.PI * (1 - i / 20), major = i % 5 === 0, r1 = R + 10, r2 = R + (major ? 20 : 15);
+    const ready = i === 15;
+    ticks += `<line x1="${(cx + r1 * Math.cos(a)).toFixed(1)}" y1="${(cy - r1 * Math.sin(a)).toFixed(1)}" x2="${(cx + r2 * Math.cos(a)).toFixed(1)}" y2="${(cy - r2 * Math.sin(a)).toFixed(1)}" stroke="${ready ? 'var(--signal)' : 'var(--line)'}" stroke-width="${major ? 2.2 : 1.4}" stroke-linecap="round"/>`;
+  }
+  const a75 = Math.PI * (1 - .75), lx = cx + (R + 31) * Math.cos(a75), ly = cy - (R + 31) * Math.sin(a75);
+  const arc = `M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`;
+  return `<svg class="gauge" viewBox="0 0 220 138" role="img" aria-label="Readiness score ${score} out of 100">
+    ${ticks}
+    <path d="${arc}" fill="none" stroke="var(--surface-2)" stroke-width="14" stroke-linecap="round"/>
+    ${score > 0 ? `<path d="${arc}" fill="none" stroke="${col}" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="${score} 100"/>` : ''}
+    <text x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}" text-anchor="middle" font-size="9" style="fill:var(--signal);font-family:var(--f-mono)">75</text>
+    <text x="${cx}" y="${cy - 16}" text-anchor="middle" font-size="40" style="font-family:var(--f-mono);font-weight:500">${score}</text>
+    <text x="${cx}" y="${cy + 2}" text-anchor="middle" font-size="11" style="fill:var(--ink-2);font-family:var(--f-mono);letter-spacing:.08em">OUT OF 100</text>
+    <text x="${cx - R}" y="${cy + 20}" text-anchor="middle" font-size="9" style="fill:var(--ink-2);font-family:var(--f-mono)">0</text>
+    <text x="${cx + R}" y="${cy + 20}" text-anchor="middle" font-size="9" style="fill:var(--ink-2);font-family:var(--f-mono)">100</text>
+  </svg>`;
+}
+function skillRows(rows){
+  return `<div class="srows">${rows.map(r => `
+    <div class="srow ${r.s >= r.t ? 'ok' : ''}">
+      <div class="sname">${esc(r.name)} ${r.s >= r.t ? '<span class="pill good">At target</span>' : (r.pr >= PRIORITY_MIN ? '<span class="pill sig">Priority</span>' : '<span class="pill">Gap</span>')}</div>
+      <div class="strack" title="Level ${r.s} of 5, target ${r.t}"><i class="sfill" style="width:${r.s / 5 * 100}%"></i><b class="smark" style="left:${r.t / 5 * 100}%"></b></div>
+      <div class="sval">${r.s} / ${r.t}</div>
+    </div>`).join('')}</div>
+    <div class="legend"><span><i></i>Your level (0 to 5)</span><span><b></b>Target for the role</span><span>Priority = importance &times; gap, at least ${PRIORITY_MIN}</span></div>`;
+}
+function sparkline(h){
+  const W = 320, H = 110, px = 28, py = 16, n = h.length;
+  const x = i => px + (n === 1 ? (W - 2 * px) / 2 : i * (W - 2 * px) / (n - 1)), y = v => H - py - (v / 100) * (H - 2 * py - 6);
+  const pts = h.map((p, i) => `${x(i).toFixed(1)},${y(p.s).toFixed(1)}`).join(' ');
+  const area = `${x(0).toFixed(1)},${H - py} ${pts} ${x(n - 1).toFixed(1)},${H - py}`;
+  const grid = [0, 50, 100].map(v => `<line x1="${px}" x2="${W - 8}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="var(--line)" stroke-width="1" ${v === 50 ? 'stroke-dasharray="3 4"' : ''}/><text x="${px - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${v}</text>`).join('');
+  const last = h[n - 1];
+  const dl = d => new Date(d + 'T00:00:00').toLocaleDateString('en-IN', {day:'numeric', month:'short'});
+  return `<svg class="hist" viewBox="0 0 ${W} ${H}" role="img" aria-label="Readiness score over time, latest ${last.s}">
+    ${grid}<polygon points="${area}" fill="var(--accent)" fill-opacity=".12"/>
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${h.map((p, i) => i < n - 1 ? `<circle cx="${x(i).toFixed(1)}" cy="${y(p.s).toFixed(1)}" r="2.8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/>` : '').join('')}
+    <circle cx="${x(n - 1).toFixed(1)}" cy="${y(last.s).toFixed(1)}" r="5" fill="var(--signal)" stroke="var(--surface)" stroke-width="2"/>
+    <text x="${x(n - 1).toFixed(1)}" y="${(y(last.s) - 10).toFixed(1)}" text-anchor="end" style="fill:var(--ink);font-size:11px">${last.s}</text>
+    <text x="${x(0)}" y="${H - 2}" text-anchor="start">${dl(h[0].d)}</text><text x="${x(n - 1)}" y="${H - 2}" text-anchor="end">${dl(last.d)}</text>
+  </svg>`;
+}
+function roleSelect(id, val){ return `<select id="${id}" data-change="role" aria-label="Target role">${Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === val ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>`; }
+const sampleBadge = () => S.isSample ? '<span class="badge" title="This profile is a sample. Analyse your own resume to replace it.">Illustrative | Sample data</span>' : '';
+
+function roadmapHTML(rm, limit){
+  const items = limit ? rm.slice(0, limit) : rm;
+  if (!items.length) return '<div class="empty">Every target for this role is met. Book a mock interview with your mentor as the next step.</div>';
+  return `<div class="route">${items.map((r, i) => `
+    <div class="stop ${i === 0 ? 'first' : ''}">
+      <div class="wp">${i + 1}</div>
+      <div class="stopbody">
+        <div class="row sp"><h4>${esc(r.name)}</h4><span class="mono small muted">level ${r.s} &rarr; ${r.t} &middot; ~${r.weeks} wk</span></div>
+        <p class="small muted">Priority ${r.pr} (importance ${r.w} &times; gap ${r.gap})${r.after.length ? ' &middot; do after ' + r.after.map(a => esc(SKILLS[a].name)).join(', ') : ''}</p>
+        ${limit ? '' : `<p class="task"><b>Practice:</b> ${esc(SKILLS[r.id].task)}</p><div class="chips">${SKILLS[r.id].res.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>`}
+        <div class="row" style="margin-top:10px"><button class="btn sm" data-act="done" data-id="${r.id}">${ic('check', 15)} Mark milestone done</button></div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function viewHome(){
+  const rd = readiness(S.target, S.levels), b = band(rd.score), rm = buildRoadmap(S.target, S.levels), fit = roleFit(S.levels);
+  const notices = [...allDocs()].sort((a, c) => c.date.localeCompare(a.date)).slice(0, 3);
+  const hr = new Date().getHours(), greet = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+  return `
+  <div class="pagehead"><div><div class="eyebrow">${greet}, ${esc(S.name.split(' ')[0])}</div><h2>Your readiness dashboard</h2>
+    <p>One view of how your skills compare with a target role, what to learn next, and answers from official campus documents.</p></div>${sampleBadge()}</div>
+  <section class="card">
+    <div class="hero">
+      <div class="gaugewrap">${gauge(rd.score)}</div>
+      <div style="display:grid; gap:14px">
+        <div class="field"><label for="roleSel">Target role</label>${roleSelect('roleSel', S.target)}</div>
+        <div class="row"><span class="pill ${b.k}">${b.t}</span><span class="small muted">Score is the weighted share of role targets you already meet.</span></div>
+        <div class="stats">
+          <div class="stat"><b>${rd.atTarget} of ${rd.rows.length}</b><span>Skills at target</span></div>
+          <div class="stat"><b>${rd.below}</b><span>Skills below target</span></div>
+          <div class="stat sig"><b>${rd.priority.length}</b><span>Priority gaps</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="grid2">
+    <section class="card"><h3>Skills against ${esc(ROLES[S.target].name)} targets</h3><p class="sub">Sorted by what moves your score most.</p>
+      ${skillRows([...rd.rows].sort((a, c) => c.pr - a.pr || c.w - a.w))}</section>
+    <div style="display:grid; gap:18px; align-content:start">
+      <section class="card"><h3>Next steps</h3><p class="sub">The first three stops on your learning route, ordered by priority and prerequisites.</p>
+        ${roadmapHTML(rm, 3)}
+        <div class="row" style="margin-top:14px"><button class="btn sm" data-nav="gap">Open full roadmap</button></div></section>
+      <section class="card"><div class="row sp"><h3>Progress over time</h3>${S.isSample ? '<span class="badge">Sample history</span>' : ''}</div><p class="sub">Each milestone you mark done adds a point.</p>${sparkline(S.history)}</section>
+    </div>
+  </div>
+  <div class="grid2">
+    <section class="card"><h3>Role fit</h3><p class="sub">Your current skills scored against every role profile.</p>
+      <div class="bars">${fit.map(f => `<div class="hbar"><span>${esc(f.name)}</span><div class="t"><i style="width:${f.score}%"></i></div><span class="v">${f.score}</span></div>`).join('')}</div></section>
+    <section class="card"><h3>Ask CampusConnect</h3><p class="sub">Answers come only from campus documents, with the source shown.</p>
+      <form data-form="quick" class="row" style="flex-wrap:nowrap"><input type="text" id="quickQ" placeholder="e.g. What is the minimum attendance for exams?" aria-label="Ask a question"><button class="btn primary" type="submit">Ask</button></form>
+      <div class="chips">${['Minimum attendance for exams?','How do I get a bus pass?','Which skills am I missing?'].map(x => `<button class="chip btnlike" data-ask="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+      <hr class="divider"><div class="eyebrow" style="margin-bottom:6px">Recently updated documents</div>
+      <div class="list">${notices.map(d => `<div><b>${esc(d.title)}</b><span class="small muted">${esc(d.owner)} &middot; ${fmtDate(d.date)}</span></div>`).join('')}</div></section>
+  </div>`;
+}
+const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'});
+
+function viewGap(){
+  const rd = readiness(S.target, S.levels), rm = buildRoadmap(S.target, S.levels), found = T.found;
+  const known = Object.keys(S.levels).filter(k => S.levels[k] > 0);
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Module 1</div><h2>PlacementGap AI 2.0</h2>
+    <p>Add your resume text, choose a role, and see a quantified skill gap with an ordered learning route.</p></div>${sampleBadge()}</div>
+  <section class="card">
+    <div class="grid2">
+      <div class="field"><label for="resumeTxt">Resume text</label>
+        <textarea id="resumeTxt" data-input="resume" style="min-height:230px" placeholder="Paste your resume text here">${esc(S.resume)}</textarea>
+        <span class="small muted">PDF and DOCX parsing needs the server component. In this build, paste the text or upload a .txt file. Your text stays in this browser.</span></div>
+      <div style="display:grid; gap:14px; align-content:start">
+        <div class="field"><label for="roleSel">Target role</label>${roleSelect('roleSel', S.target)}</div>
+        <div class="field"><label for="nameIn">Your name</label><input type="text" id="nameIn" data-input="name" value="${esc(S.name)}"></div>
+        <div class="field"><label for="resumeFile">Upload resume (.txt or .md)</label><input type="file" id="resumeFile" accept=".txt,.md,text/plain"></div>
+        <div class="row"><button class="btn primary" data-act="analyse">${ic('target', 16)} Analyse resume</button><button class="btn" data-act="loadSample">Load sample resume</button></div>
+      </div>
+    </div>
+  </section>
+  ${found ? `<section class="card"><h3>Skills found in your resume</h3><p class="sub">Synonyms are mapped to one taxonomy name. Levels are estimated from how often and how concretely a skill appears, so adjust anything that looks wrong.</p>
+    ${Object.keys(found).length ? `<div class="found">${Object.entries(found).map(([id, f]) => `<div class="fskill"><div class="top"><b>${esc(SKILLS[id].name)}</b><span class="lvl">${f.level}/5 ${LEVEL_WORDS[f.level]}</span></div><span class="maps">matched: ${f.via.map(esc).join(', ')} &middot; ${f.mentions} mention${f.mentions > 1 ? 's' : ''}</span></div>`).join('')}</div>` : '<div class="empty">No known skills were found. Check the text or adjust levels below.</div>'}</section>` : ''}
+  <div class="grid2">
+    <section class="card"><div class="row sp"><h3>Gap against ${esc(ROLES[S.target].name)}</h3><span class="pill ${band(rd.score).k}">${rd.score} / 100</span></div>
+      <p class="sub">Drag a slider to correct a level. Score and route update when you release it.</p>
+      <div class="srows">${rd.rows.map(r => `
+        <div class="field"><div class="row sp"><label for="lv_${r.id}">${esc(r.name)}</label><span class="mono small" id="out_${r.id}">${r.s} &middot; ${LEVEL_WORDS[r.s]} (target ${r.t})</span></div>
+        <input type="range" id="lv_${r.id}" min="0" max="5" step="1" value="${r.s}" data-range="${r.id}" data-t="${r.t}"></div>`).join('')}</div></section>
+    <section class="card"><h3>Why this score</h3><p class="sub">Every number below feeds the formula, so a mentor can check it.</p>
+      <div class="formula">R = 100 &times; &Sigma; w&middot;min(s/t, 1) / &Sigma; w</div>
+      <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Skill</th><th class="num">w</th><th class="num">s</th><th class="num">t</th><th class="num">min(s/t,1)</th></tr></thead>
+      <tbody>${rd.rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.w}</td><td class="num">${r.s}</td><td class="num">${r.t}</td><td class="num">${r.f.toFixed(2)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="small muted" style="margin-top:10px">w = importance, s = your level, t = target. Result: <b class="mono">${rd.raw.toFixed(1)}</b>, shown as ${rd.score}.</p></section>
+  </div>
+  <section class="card"><h3>Your learning route</h3><p class="sub">Highest priority first, with prerequisites respected (topological order). Marking a milestone raises that skill by one level and logs a new score.</p>${roadmapHTML(rm)}</section>`;
+}
+
+function srcHTML(sources, kind){
+  if (!sources || !sources.length) return '';
+  return `<div class="srcs">${sources.map((s, i) => kind === 'campus'
+    ? `<details class="src"><summary><span class="pill acc">[${i + 1}]</span><b>${esc(s.title)}</b><span class="muted">&middot; ${esc(s.sec)}</span></summary><p>${esc(s.text)}</p><p class="small"><i>Sample document. Replace with the official file before use.</i></p></details>`
+    : `<details class="src"><summary><span class="pill acc">Source</span><b>${esc(s.title)}</b></summary><p>${esc(s.text)}</p></details>`).join('')}</div>`;
+}
+function confHTML(c){ return `<span class="conf" title="Share of query terms found in the best passage">match <i><b style="width:${Math.round(c * 100)}%"></b></i>${Math.round(c * 100)}%</span>`; }
+
+function viewCampus(){
+  const a = T.campusAns;
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Module 2</div><h2>CampusConnect AI</h2>
+    <p>Ask about attendance, exams, fees, placements or hostel rules. Each answer is built from retrieved passages and shows its source.</p></div></div>
+  <section class="card">
+    <form data-form="campus" class="row" style="flex-wrap:nowrap"><input type="text" id="campusQ" value="${esc(T.campusQ)}" placeholder="Ask a campus question" aria-label="Campus question"><button class="btn primary" type="submit">Ask</button></form>
+    <div class="chips">${SELF_TEST.slice(0, 6).map(x => `<button class="chip btnlike" data-campus="${esc(x[0])}">${esc(x[0])}</button>`).join('')}</div>
+    ${a ? `<hr class="divider">${a.ok
+      ? `<div class="route-tag"><span class="pill acc">CampusConnect AI</span>${confHTML(a.conf)}</div><p>${esc(a.text)}</p>${srcHTML(a.sources, 'campus')}`
+      : `<div class="route-tag"><span class="pill warn">Low confidence</span>${confHTML(a.conf)}</div><p>I could not find a reliable answer in the campus documents. The question was sent to the review queue so a staff member can reply.</p>`}` : ''}
+  </section>
+  <section class="card"><h3>Document library</h3><p class="sub">${allDocs().length} documents, ${INDEX.N} searchable passages. These are sample documents written for this prototype.</p>
+    <div class="grid2">${allDocs().map(d => `<details class="src"><summary><b>${esc(d.title)}</b></summary><p class="small muted">${esc(d.owner)} &middot; ${fmtDate(d.date)}</p>${d.sections.map(s => `<p><b>${esc(s[0])}.</b> ${esc(s[1])}</p>`).join('')}</details>`).join('')}</div></section>`;
+}
+
+function chatMsg(m){
+  if (m.role === 'user') return `<div class="msg user"><div class="bubble">${esc(m.text)}</div></div>`;
+  if (m.role === 'human') return `<div class="msg human"><div class="route-tag"><span class="pill sig">Reply from staff</span></div><div class="bubble">${esc(m.text)}</div></div>`;
+  const tag = m.route === 'career' ? '<span class="pill acc">PlacementGap AI</span>' : m.route === 'campus' ? '<span class="pill acc">CampusConnect AI</span>' : '<span class="pill">CampusPilot</span>';
+  return `<div class="msg bot"><div class="route-tag">${tag}${m.escalated ? '<span class="pill warn">Sent to review queue</span>' : ''}${m.conf != null && !m.escalated && m.route !== 'welcome' ? confHTML(m.conf) : ''}</div>
+    <div class="bubble">${esc(m.text)}${srcHTML(m.sources, m.route === 'career' ? 'career' : 'campus')}</div>
+    ${m.id && m.route !== 'welcome' ? `<div class="feedback">Helpful? <button data-fb="up" data-id="${m.id}" aria-pressed="${m.fb === 'up'}" aria-label="Helpful">&#128077;</button><button data-fb="down" data-id="${m.id}" aria-pressed="${m.fb === 'down'}" aria-label="Not helpful">&#128078;</button></div>` : ''}</div>`;
+}
+function viewChat(){
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Unified assistant</div><h2>Ask CampusPilot</h2>
+    <p>One chat for both modules. Career questions go to PlacementGap AI, campus questions go to CampusConnect AI.</p></div></div>
+  <section class="card chatcard">
+    <div class="chathead"><div class="small muted">Answering as ${esc(S.name)} &middot; target role ${esc(ROLES[S.target].name)}</div><button class="btn sm" data-act="clearChat">Clear chat</button></div>
+    <div class="msgs" id="msgs" aria-live="polite">${T.chat.map(chatMsg).join('')}${T.typing ? '<div class="msg bot"><div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div></div>' : ''}</div>
+    <form class="composer" data-form="chat">
+      <div class="chips" style="margin:0">${['Which skills am I missing for a Data Analyst role?','Give me a roadmap','What is my readiness score?','When does the library close on Saturday?','How do I apply for revaluation?'].map(x => `<button type="button" class="chip btnlike" data-ask="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+      <div class="row"><input type="text" id="chatIn" placeholder="Type your question" aria-label="Message" autocomplete="off"><button class="btn primary" type="submit">${ic('send', 16)} Send</button></div>
+    </form>
+  </section>`;
+}
+
+function cohortRows(){
+  const rows = [{name:S.name + ' (you)', role:S.target, levels:S.levels, active:'Today', me:true}].concat(COHORT).map(s => {
+    const rd = readiness(s.role, s.levels); return {...s, rd, score:rd.score, top:[...rd.rows].sort((a, c) => c.pr - a.pr)[0]};
+  });
+  return rows;
+}
+function viewCohort(){
+  let rows = cohortRows();
+  if (T.filterRole !== 'all') rows = rows.filter(r => r.role === T.filterRole);
+  if (T.cohortFilter !== 'all') rows = rows.filter(r => band(r.score).k === T.cohortFilter);
+  rows.sort((a, c) => T.sortBy === 'name' ? a.name.localeCompare(c.name) : T.sortBy === 'score' ? a.score - c.score : 0);
+  const sel = rows.find(r => r.name === T.selStudent);
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Mentor view</div><h2>Cohort readiness</h2>
+    <p>See who needs support first. The lowest scores are listed first so feedback time goes where it helps most.</p></div><span class="badge">Illustrative | Sample data</span></div>
+  <section class="card">
+    <div class="row" style="margin-bottom:12px">
+      <div class="field" style="min-width:170px"><label for="fRole">Role</label><select id="fRole" data-change="fRole"><option value="all">All roles</option>${Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${T.filterRole === k ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></div>
+      <div class="field" style="min-width:170px"><label for="fStat">Status</label><select id="fStat" data-change="fStat"><option value="all">All</option><option value="good" ${T.cohortFilter === 'good' ? 'selected' : ''}>On track</option><option value="warn" ${T.cohortFilter === 'warn' ? 'selected' : ''}>Needs support</option><option value="bad" ${T.cohortFilter === 'bad' ? 'selected' : ''}>At risk</option></select></div>
+      <div class="field" style="min-width:150px"><label for="fSort">Sort by</label><select id="fSort" data-change="fSort"><option value="score" ${T.sortBy === 'score' ? 'selected' : ''}>Lowest score</option><option value="name" ${T.sortBy === 'name' ? 'selected' : ''}>Name</option></select></div>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Student</th><th>Target role</th><th>Readiness</th><th>Status</th><th>Biggest gap</th><th>Active</th></tr></thead><tbody>
+    ${rows.map(r => { const b = band(r.score); return `<tr class="click ${sel && sel.name === r.name ? 'sel' : ''}" data-student="${esc(r.name)}" tabindex="0"><td><b>${esc(r.name)}</b></td><td>${esc(ROLES[r.role].name)}</td>
+      <td><span class="minibar"><i style="width:${r.score}%;background:var(--${b.k})"></i></span><span class="mono">${r.score}</span></td><td><span class="pill ${b.k}">${b.t}</span></td><td>${r.top && r.top.gap ? esc(r.top.name) : '<span class="muted">None</span>'}</td><td class="muted">${esc(r.active)}</td></tr>`; }).join('') || '<tr><td colspan="6"><div class="empty">No students match these filters.</div></td></tr>'}
+    </tbody></table></div>
+    <p class="small muted" style="margin-top:10px">Illustrative thresholds: 75 and above is on track, 50 to 74 needs support, below 50 is at risk.</p>
+  </section>
+  ${sel ? `<section class="card"><div class="row sp"><h3>${esc(sel.name)}</h3><span class="pill ${band(sel.score).k}">${sel.score} / 100</span></div>
+    <p class="sub">${esc(ROLES[sel.role].name)} &middot; ${esc(sel.year || 'III year, AI & DS')}</p>
+    <div class="grid2"><div>${skillRows([...sel.rd.rows].sort((a, c) => c.pr - a.pr))}</div>
+    <div class="field"><label for="noteTxt">Mentor note (kept in this browser)</label><textarea id="noteTxt" data-input="note" data-who="${esc(sel.name)}" placeholder="Write feedback for this student">${esc(S.notes[sel.name] || '')}</textarea>
+    <div class="row"><button class="btn primary sm" data-act="saveNote">Save note</button></div></div></div></section>` : '<div class="empty">Select a student to see their skill profile and add a note.</div>'}`;
+}
+
+function viewQueue(){
+  const open = T.queue.filter(q => q.status === 'open'), done = T.queue.filter(q => q.status !== 'open');
+  const item = q => `<div><div class="row sp"><b>${esc(q.q)}</b>${q.sample ? '<span class="badge">Sample</span>' : ''}</div><span class="small muted">${esc(q.who)} &middot; ${esc(q.at)}</span>
+    ${q.status === 'open' ? `<div class="row" style="flex-wrap:nowrap;margin-top:6px"><input type="text" id="rep_${q.id}" placeholder="Type a reply to the student" aria-label="Reply"><button class="btn primary sm" data-act="reply" data-id="${q.id}">Send reply</button></div>` : `<p class="small" style="margin-top:4px"><span class="pill good">Answered</span> ${esc(q.reply)}</p>`}</div>`;
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Human review</div><h2>Review queue</h2>
+    <p>Questions the assistant could not answer with enough confidence land here. Your reply goes back to the student in the chat.</p></div></div>
+  <section class="card"><h3>Open (${open.length})</h3><p class="sub">Newest first.</p>${open.length ? `<div class="list">${open.map(item).join('')}</div>` : '<div class="empty">Nothing waiting. Low-confidence questions will appear here.</div>'}</section>
+  ${done.length ? `<section class="card"><h3>Answered (${done.length})</h3><div class="list">${done.map(item).join('')}</div></section>` : ''}`;
+}
+
+function viewAnalytics(){
+  const rows = cohortRows(), n = rows.length, avg = Math.round(rows.reduce((a, r) => a + r.score, 0) / n);
+  const ready = rows.filter(r => r.score >= 75).length, risk = rows.filter(r => r.score < 50).length;
+  const gapCount = {}; rows.forEach(r => r.rd.rows.forEach(k => { if (k.s < k.t) gapCount[k.id] = (gapCount[k.id] || 0) + 1; }));
+  const topGaps = Object.entries(gapCount).sort((a, c) => c[1] - a[1]).slice(0, 8), maxG = topGaps.length ? topGaps[0][1] : 1;
+  const buckets = Array(10).fill(0); rows.forEach(r => buckets[Math.min(9, Math.floor(r.score / 10))]++); const maxB = Math.max(...buckets, 1);
+  const M = T.M, lat = [...M.lat].sort((a, c) => a - c), med = lat.length ? lat[Math.floor(lat.length / 2)] : null, st = T.selfTest;
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Placement cell</div><h2>Placement analytics</h2>
+    <p>Where the cohort stands and which skills to teach next.</p></div><span class="badge">Illustrative | Sample data</span></div>
+  <div class="grid3">
+    <div class="card"><div class="eyebrow">Students assessed</div><div class="mono" style="font-size:30px">${n}</div></div>
+    <div class="card"><div class="eyebrow">Average readiness</div><div class="mono" style="font-size:30px">${avg}</div></div>
+    <div class="card"><div class="eyebrow">On track (75+)</div><div class="mono" style="font-size:30px">${ready} <span class="small muted">of ${n}</span></div></div>
+    <div class="card"><div class="eyebrow">At risk (below 50)</div><div class="mono" style="font-size:30px;color:var(--signal)">${risk}</div></div>
+  </div>
+  <div class="grid2">
+    <section class="card"><h3>Skills most students are missing</h3><p class="sub">Number of students below target, across all roles.</p>
+      <div class="bars">${topGaps.map(([id, c]) => `<div class="hbar"><span>${esc(SKILLS[id].name)}</span><div class="t"><i style="width:${c / maxG * 100}%"></i></div><span class="v">${c}</span></div>`).join('')}</div></section>
+    <section class="card"><h3>Readiness distribution</h3><p class="sub">Students per 10-point band.</p>
+      <div class="cols" role="img" aria-label="Histogram of readiness scores">${buckets.map((c, i) => `<div class="col"><em>${c || ''}</em><i style="height:${c / maxB * 100}%;${i >= 7 ? 'background:var(--good)' : i < 5 ? 'background:var(--signal)' : ''}"></i><span>${i * 10}</span></div>`).join('')}</div></section>
+  </div>
+  <section class="card"><h3>Evaluation, measured live</h3><p class="sub">These numbers come from this session, not from a survey. They show how the planned metrics are collected.</p>
+    <div class="grid3">
+      <div class="stat"><b>${M.answers}</b><span>Questions answered</span></div>
+      <div class="stat"><b>${M.answers ? Math.round(M.grounded / M.answers * 100) + '%' : '-'}</b><span>Answers with a cited source</span></div>
+      <div class="stat sig"><b>${M.escalated}</b><span>Sent to human review</span></div>
+      <div class="stat"><b>${M.up + M.down ? Math.round(M.up / (M.up + M.down) * 100) + '%' : '-'}</b><span>Rated helpful (${M.up + M.down} votes)</span></div>
+      <div class="stat"><b>${med == null ? '-' : med.toFixed(1) + ' ms'}</b><span>Median answer time</span></div>
+    </div>
+    <hr class="divider">
+    <div class="row sp"><div><b>Retrieval self-test</b><p class="small muted">${SELF_TEST.length} labelled questions against the sample documents. Reports Recall@3 and MRR.</p></div><button class="btn" data-act="selfTest">Run self-test</button></div>
+    ${st ? `<div class="grid3" style="margin-top:12px"><div class="stat"><b>${(st.recall * 100).toFixed(0)}%</b><span>Recall@${st.k}</span></div><div class="stat"><b>${st.mrr.toFixed(2)}</b><span>MRR</span></div><div class="stat"><b>${st.n}</b><span>Questions tested</span></div></div>
+      <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Question</th><th>Expected</th><th>Top hit</th><th class="num">Rank</th></tr></thead><tbody>${st.rows.map(r => `<tr><td>${esc(r.q)}</td><td>${esc(r.exp)}</td><td>${esc(r.got)}</td><td class="num">${r.rank || 'miss'}</td></tr>`).join('')}</tbody></table></div>` : ''}
+  </section>`;
+}
+
+function viewDocs(){
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Placement cell</div><h2>Campus documents</h2>
+    <p>The knowledge base behind CampusConnect AI. Add a circular and it is searchable straight away.</p></div></div>
+  <section class="card"><h3>Add a document</h3><p class="sub">Paste text or upload a .txt file. Start each section with a heading line ending in a colon to get sections, or leave it as one block.</p>
+    <div class="grid2"><div class="field"><label for="docTitle">Title</label><input type="text" id="docTitle" placeholder="e.g. Diwali holiday circular"></div>
+    <div class="field"><label for="docFile">Or upload a .txt file</label><input type="file" id="docFile" accept=".txt,.md,text/plain"></div></div>
+    <div class="field" style="margin-top:12px"><label for="docText">Text</label><textarea id="docText" placeholder="Paste the circular text here"></textarea></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" data-act="addDoc">Add to knowledge base</button></div></section>
+  <section class="card"><h3>Indexed documents</h3><p class="sub">${allDocs().length} documents, ${INDEX.N} passages.</p>
+    <div class="tablewrap"><table><thead><tr><th>Title</th><th>Owner</th><th>Updated</th><th class="num">Passages</th><th></th></tr></thead><tbody>
+    ${allDocs().map(d => `<tr><td><b>${esc(d.title)}</b></td><td>${esc(d.owner)}</td><td>${fmtDate(d.date)}</td><td class="num">${d.sections.length}</td><td>${d.user ? `<button class="btn sm" data-act="delDoc" data-id="${esc(d.id)}">Remove</button>` : '<span class="pill">Sample</span>'}</td></tr>`).join('')}</tbody></table></div></section>`;
+}
+
+function viewAbout(){
+  return `
+  <div class="pagehead"><div><div class="eyebrow">Project</div><h2>How CampusPilot AI works</h2>
+    <p>An intelligent campus and career readiness assistant with two modules and one dashboard.</p></div></div>
+  <section class="card"><h3>PlacementGap AI 2.0</h3><p class="sub">Resume text to measurable gap to learning route.</p>
+    <div class="pipeline"><div><b>1. Resume + role</b><span>Text and a target role.</span></div><div><b>2. Extract skills</b><span>Keyword rules over the taxonomy.</span></div><div><b>3. Map to taxonomy</b><span>Synonyms unified, e.g. MySQL to SQL.</span></div><div><b>4. Compare with role</b><span>Role profile with weights and targets.</span></div><div><b>5. Gap and score</b><span>Weighted coverage, gaps ranked.</span></div><div><b>6. Roadmap</b><span>Priority order with prerequisites.</span></div></div></section>
+  <section class="card"><h3>CampusConnect AI</h3><p class="sub">Retrieval-augmented answers from campus documents.</p>
+    <div class="pipeline"><div><b>1. Documents</b><span>Circulars, FAQs, regulations.</span></div><div><b>2. Chunk</b><span>One passage per section.</span></div><div><b>3. Index</b><span>BM25 term weighting.</span></div><div><b>4. Retrieve top-k</b><span>Best three passages.</span></div><div><b>5. Grounded answer</b><span>Sentences from the sources, with citations.</span></div><div><b>6. Fallback</b><span>Low confidence goes to a human.</span></div></div></section>
+  <div class="grid2">
+    <section class="card"><h3>What runs in this build</h3><div class="list">
+      <div><b>Runs in your browser</b><span class="muted">Skill extraction, scoring, roadmap ordering, BM25 retrieval and the router. No data leaves the page.</span></div>
+      <div><b>Planned for the server</b><span class="muted">spaCy entity recognition, Sentence-BERT matching, FAISS or ChromaDB vector search, an LLM to phrase answers, PDF and DOCX parsing, login with roles, and PostgreSQL storage.</span></div>
+      <div><b>Sample content</b><span class="muted">The cohort, the campus documents and the starting profile are sample data written for this prototype. Replace them with consented, anonymised, official material.</span></div></div></section>
+    <section class="card"><h3>Safeguards</h3><div class="list">
+      <div><b>Explainable</b><span class="muted">Every score shows its inputs and formula.</span></div>
+      <div><b>Cited</b><span class="muted">Campus answers show the document and section they came from.</span></div>
+      <div><b>Human in the loop</b><span class="muted">Answers below ${Math.round(CONF_MIN * 100)}% match confidence go to the review queue.</span></div>
+      <div><b>Privacy aware</b><span class="muted">Resume text is kept only in this browser. Role switching here is a demo; production uses sign-in.</span></div></div></section>
+  </div>
+  <section class="card"><h3>Team</h3><p>Muthupriya K, Rajeshwari S, Nandhini C</p><p class="small muted">Department of Artificial Intelligence and Data Science, V.S.B College of Engineering Technical Campus. Project review, October 2026.</p></section>`;
+}
+
+const VIEWS = {home:viewHome, gap:viewGap, campus:viewCampus, chat:viewChat, about:viewAbout, cohort:viewCohort, queue:viewQueue, analytics:viewAnalytics, docs:viewDocs};
+
+function render(){
+  const ae = document.activeElement, fid = ae && ae.id, pos = ae && ae.selectionStart;
+  const nav = NAVS[S.role]; if (!nav.some(n => n[0] === S.view)) S.view = FIRST[S.role];
+  const openCount = T.queue.filter(q => q.status === 'open').length;
+  document.getElementById('app').innerHTML = `
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><div class="mark">${ic('plane', 22)}</div><div><h1>CampusPilot AI</h1><small>Intelligent Campus &amp; Career Readiness Assistant</small></div></div>
+      <div class="tools">
+        <div class="seg" role="group" aria-label="View as">${[['student','Student'],['mentor','Mentor'],['cell','Placement cell']].map(([k, l]) => `<button data-role="${k}" aria-pressed="${S.role === k}">${l}</button>`).join('')}</div>
+        <button class="iconbtn" data-act="theme" aria-label="Toggle dark mode">${ic('moon', 18)}</button>
+      </div>
+    </header>
+    <nav class="nav" aria-label="Sections">${nav.map(([k, l, i]) => `<button data-nav="${k}" ${S.view === k ? 'aria-current="page"' : ''}>${ic(i, 18)}<span>${l}</span>${k === 'queue' && openCount ? `<span class="count">${openCount}</span>` : ''}</button>`).join('')}
+      <div class="navnote">Role switching is a demo of the three user types. A production build signs users in and applies their role.</div></nav>
+    <main id="main">${VIEWS[S.view]()}</main>
+    <footer>V.S.B College of Engineering Technical Campus &middot; Department of Artificial Intelligence and Data Science &middot; CampusPilot AI prototype, October 2026</footer>
+  </div>`;
+  if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch (e) {} } }
+  const m = document.getElementById('msgs'); if (m) m.scrollTop = m.scrollHeight;
+}
+let toastTimer;
+function toast(t){ const el = document.getElementById('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 3200); }
+function go(v){ S.view = v; save(); render(); window.scrollTo(0, 0); }
+
+/* ---------- Behaviour ---------- */
+function pushHistory(){ const d = new Date().toISOString().slice(0, 10), s = readiness(S.target, S.levels).score, last = S.history[S.history.length - 1];
+  if (last && last.d === d) last.s = s; else S.history.push({d, s}); if (S.history.length > 24) S.history.shift(); }
+function recordAnswer(res, ms){ const M = T.M; M.answers++; M.lat.push(ms); if (res.sources && res.sources.length) M.grounded++; if (res.escalated) M.escalated++; }
+function ask(q){
+  q = q.trim(); if (!q) return;
+  T.chat.push({id:Date.now(), role:'user', text:q}); T.typing = true; if (S.view !== 'chat') S.view = 'chat'; render();
+  setTimeout(() => {
+    const t0 = performance.now(), route = routeQuestion(q); let msg;
+    if (route === 'career') { const r = answerCareer(q, S); msg = {role:'bot', route:'career', text:r.text, sources:r.sources, conf:r.conf}; }
+    else { const r = answerCampus(q);
+      if (r.ok) msg = {role:'bot', route:'campus', text:r.text, sources:r.sources, conf:r.conf};
+      else { T.queue.unshift({id:Date.now(), who:S.name, q, at:'Just now', status:'open', reply:''});
+        msg = {role:'bot', route:'campus', text:'I could not find a reliable answer in the campus documents, so I have sent your question to the review queue. A staff member will reply here.', conf:r.conf, escalated:true, sources:[]}; } }
+    msg.id = Date.now() + 1; T.chat.push(msg); recordAnswer(msg, performance.now() - t0); T.typing = false; render();
+  }, 450);
+}
+function askCampusInline(q){
+  q = q.trim(); T.campusQ = q; if (!q) return;
+  const t0 = performance.now(), r = answerCampus(q);
+  if (!r.ok) T.queue.unshift({id:Date.now(), who:S.name, q, at:'Just now', status:'open', reply:''});
+  T.campusAns = r; recordAnswer({sources:r.ok ? r.sources : [], escalated:!r.ok}, performance.now() - t0); render();
+}
+function analyse(){
+  const found = extractSkills(S.resume); T.found = found;
+  const lv = {}; Object.entries(found).forEach(([id, f]) => lv[id] = f.level);
+  S.levels = lv; S.isSample = S.resume === SAMPLE_RESUME ? S.isSample : false;
+  S.history = S.isSample ? S.history : [{d:new Date().toISOString().slice(0, 10), s:readiness(S.target, lv).score}];
+  if (S.isSample) pushHistory(); save(); render();
+  toast(Object.keys(found).length + ' skills found. Readiness for ' + ROLES[S.target].name + ': ' + readiness(S.target, lv).score + '/100');
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act],[data-nav],[data-role],[data-ask],[data-campus],[data-fb],[data-student]'); if (!t) return;
+  const d = t.dataset;
+  if (d.role) { S.role = d.role; S.view = FIRST[d.role]; save(); render(); return; }
+  if (d.nav) return go(d.nav);
+  if (d.ask) return ask(d.ask);
+  if (d.campus) { T.campusQ = d.campus; return askCampusInline(d.campus); }
+  if (d.fb) { const m = T.chat.find(x => String(x.id) === d.id); if (m && !m.fb) { m.fb = d.fb; T.M[d.fb]++; render(); } return; }
+  if (d.student) { T.selStudent = d.student; return render(); }
+  switch (d.act) {
+    case 'theme': { const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (!document.documentElement.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+      S.theme = dark ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', S.theme); save(); break; }
+    case 'analyse': return analyse();
+    case 'loadSample': S.resume = SAMPLE_RESUME; S.name = 'Priya S'; S.levels = {...SAMPLE_LEVELS}; S.isSample = true; S.history = SAMPLE_HISTORY.map(x => ({...x})); T.found = extractSkills(SAMPLE_RESUME); save(); render(); toast('Sample resume loaded'); return;
+    case 'done': { const id = d.id, k = ROLES[S.target].skills.find(x => x.id === id), before = readiness(S.target, S.levels).score;
+      S.levels[id] = Math.min(k.t, (S.levels[id] || 0) + 1); pushHistory(); save(); render();
+      toast(SKILLS[id].name + ' is now level ' + S.levels[id] + '. Readiness ' + before + ' to ' + readiness(S.target, S.levels).score); return; }
+    case 'clearChat': T.chat = T.chat.slice(0, 1); return render();
+    case 'saveNote': { const el = document.getElementById('noteTxt'); S.notes[el.dataset.who] = el.value; save(); return toast('Note saved'); }
+    case 'reply': { const q = T.queue.find(x => String(x.id) === d.id), el = document.getElementById('rep_' + d.id);
+      if (!q || !el.value.trim()) return toast('Type a reply first');
+      q.status = 'answered'; q.reply = el.value.trim(); T.chat.push({id:Date.now(), role:'human', text:q.reply}); render(); return toast('Reply sent to the student'); }
+    case 'selfTest': T.selfTest = runSelfTest(3); return render();
+    case 'addDoc': {
+      const title = document.getElementById('docTitle').value.trim(), text = document.getElementById('docText').value.trim();
+      if (!title || !text) return toast('Add a title and some text first');
+      const secs = []; let cur = ['Overview', []];
+      text.split(/\n+/).forEach(line => { const m = line.match(/^([A-Z][^:.]{2,60}):\s*(.*)$/);
+        if (m && !m[2]) { if (cur[1].length) secs.push([cur[0], cur[1].join(' ')]); cur = [m[1], []]; } else if (line.trim()) cur[1].push(line.trim()); });
+      if (cur[1].length) secs.push([cur[0], cur[1].join(' ')]);
+      S.userDocs.push({id:'u' + Date.now(), user:true, title, date:new Date().toISOString().slice(0, 10), owner:'Added by placement cell', sections:secs}); save(); reindex(); render(); return toast('Added. ' + secs.length + ' passages indexed'); }
+    case 'delDoc': S.userDocs = S.userDocs.filter(x => x.id !== d.id); save(); reindex(); return render();
+  }
+});
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('tr[data-student]')) { e.preventDefault(); T.selStudent = e.target.dataset.student; render(); } });
+document.addEventListener('submit', e => {
+  e.preventDefault(); const f = e.target.dataset.form;
+  if (f === 'chat') { const el = document.getElementById('chatIn'), v = el.value; el.value = ''; ask(v); }
+  if (f === 'quick') ask(document.getElementById('quickQ').value);
+  if (f === 'campus') askCampusInline(document.getElementById('campusQ').value);
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.input === 'resume') S.resume = t.value;
+  else if (t.dataset.input === 'name') { S.name = t.value || 'Student'; }
+  else if (t.dataset.range) { const o = document.getElementById('out_' + t.dataset.range), v = +t.value; o.textContent = v + ' · ' + LEVEL_WORDS[v] + ' (target ' + t.dataset.t + ')'; }
+  if (t.dataset.input) save();
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.range) { S.levels[t.dataset.range] = +t.value; S.isSample = false; pushHistory(); save(); render(); }
+  else if (t.dataset.change === 'role') { S.target = t.value; save(); render(); }
+  else if (t.dataset.change === 'fRole') { T.filterRole = t.value; render(); }
+  else if (t.dataset.change === 'fStat') { T.cohortFilter = t.value; render(); }
+  else if (t.dataset.change === 'fSort') { T.sortBy = t.value; render(); }
+  else if (t.id === 'resumeFile' || t.id === 'docFile') {
+    const f = t.files[0]; if (!f) return; const rd = new FileReader();
+    rd.onload = () => { if (t.id === 'resumeFile') { S.resume = String(rd.result); save(); render(); toast('Resume loaded. Choose Analyse resume.'); }
+      else { document.getElementById('docText').value = String(rd.result); const ti = document.getElementById('docTitle'); if (!ti.value) ti.value = f.name.replace(/\.[^.]+$/, ''); toast('File loaded. Review it, then add it.'); } };
+    rd.readAsText(f);
+  }
+});
+
+T.found = extractSkills(SAMPLE_RESUME);
+render();
+</script>
+
+</body></html>
